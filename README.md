@@ -1,18 +1,50 @@
-# simple-python-pyinstaller-app
+## Run Jenkins in docker
 
-This repository is for the
-[Build a Python app with PyInstaller](https://jenkins.io/doc/tutorials/build-a-python-app-with-pyinstaller/)
-tutorial in the [Jenkins User Documentation](https://jenkins.io/doc/).
+[Installing Jenkins - Docker (Official doc)](https://www.jenkins.io/doc/book/installing/docker/)
 
-The repository contains a simple Python application which is a command line tool "add2vals" that outputs the addition of two values. If at least one of the
-values is a string, "add2vals" treats both values as a string and instead
-concatenates the values. The "add2" function in the "calc" library (which
-"add2vals" imports) is accompanied by a set of unit tests. These are tested with pytest to check that this function works as expected and the results are saved
-to a JUnit XML report.
+### Build image
 
-The delivery of the "add2vals" tool through PyInstaller converts this tool into
-a standalone executable file for Linux, which you can download through Jenkins
-and execute at the command line on Linux machines without Python.
+Build image from Dockerfile
 
-The `jenkins` directory contains an example of the `Jenkinsfile` (i.e. Pipeline)
-you'll be creating yourself during the tutorial.
+```dockerfile
+FROM jenkins/jenkins:2.452.3-jdk17
+USER root
+RUN apt-get update && apt-get install -y lsb-release
+RUN curl -fsSLo /usr/share/keyrings/docker-archive-keyring.asc \
+https://download.docker.com/linux/debian/gpg
+RUN echo "deb [arch=$(dpkg --print-architecture) \
+signed-by=/usr/share/keyrings/docker-archive-keyring.asc] \
+https://download.docker.com/linux/debian \
+$(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+RUN apt-get update && apt-get install -y docker-ce-cli
+USER jenkins
+RUN jenkins-plugin-cli --plugins "blueocean docker-workflow"
+```
+
+```shell
+docker build -t myjenkins-blueocean:2.452.3-1 .
+```
+
+### Run container
+
+```shell
+docker run --name jenkins-blueocean --restart=on-failure --detach \
+--network jenkins --env DOCKER_HOST=tcp://docker:2376 \
+--env DOCKER_CERT_PATH=/certs/client --env DOCKER_TLS_VERIFY=1 \
+--publish 8080:8080 --publish 50000:50000 \
+--volume jenkins-data:/var/jenkins_home \
+--volume jenkins-docker-certs:/certs/client:ro \
+myjenkins-blueocean:2.452.3-1
+```
+
+
+### Jenkins pipeline flow
+
+1. build
+2. test
+3. zip
+4. put zip to S3 bucket
+5. terraform plan
+6. terraform apply with zip file from S3
+   - create AWS Lambda from zip file 
+
